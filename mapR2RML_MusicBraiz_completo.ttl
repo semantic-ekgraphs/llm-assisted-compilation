@@ -1,0 +1,905 @@
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+
+@prefix lb: <https://github.com/LinkedBrainz/r2rml/v0.1#> .
+@prefix ngs: <http://musicbrainz.org/NGS> .
+
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+@prefix mo: <http://purl.org/ontology/mo/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix ov: <http://open.vocab.org/terms/> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> .
+@prefix event: <http://purl.org/NET/c4dm/event.owl#> .
+@prefix is: <http://purl.org/ontology/is/core#> .
+@prefix isi: <http://purl.org/ontology/is/inst/> .
+@prefix time: <http://www.w3.org/2006/time#> .
+@prefix tl: <http://purl.org/NET/c4dm/timeline.owl#> .
+@prefix muto: <http://purl.org/muto/core#> .
+
+
+# MB artist => mo:MusicArtist
+
+lb:sm_artist rr:template "http://musicbrainz.org/artist/{gid}#_" .
+
+lb:Artist a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT * 
+       FROM artist;"""] ;
+  rr:subjectMap 
+    [rr:class mo:MusicArtist ;
+     rr:template "http://musicbrainz.org/artist/{gid}#_"] ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:musicbrainz_guid ;
+     rr:objectMap [rr:column "gid" ; rr:datatype xsd:string]] ,
+    [rr:predicate foaf:name ;
+     rr:objectMap [rr:column "name" ; rr:datatype xsd:string]] ,
+    [rr:predicate ov:sortLabel ;
+     rr:objectMap [rr:column "sort_name" ; rr:datatype xsd:string]] .
+
+
+lb:artist_type_person a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT * 
+       FROM artist 
+       WHERE artist.type = 1"""] ;
+  rr:subjectMap lb:sm_artist ;
+  rr:predicateObjectMap 
+    [rr:predicate rdf:type ;
+     rr:object mo:SoloMusicArtist] .
+
+lb:artist_type_group a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT * 
+       FROM artist 
+       WHERE artist.type = 2"""] ;
+  rr:subjectMap lb:sm_artist ;
+  rr:predicateObjectMap 
+    [rr:predicate rdf:type ;
+     rr:object mo:MusicGroup] .
+
+# BN: This fixes a problem in the D2R - 
+#       the FOAF spec says the strings should be lower case
+lb:artist_gender a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT artist.gid, LOWER(gender.name) AS gender
+       FROM artist
+            INNER JOIN gender ON artist.gender = gender.id"""] ;
+  rr:subjectMap lb:sm_artist ;
+  rr:predicateObjectMap 
+    [rr:predicate foaf:gender ;
+     rr:objectMap [rr:column "gender" ; rr:datatype xsd:string]] .
+
+lb:artist_area a rr:TriplesMap ;
+  rr:logicalTable[rr:sqlQuery 
+    """SELECT artist.gid, area.gid AS area
+       FROM artist
+            INNER JOIN area ON artist.area = area.id"""] ;
+  rr:subjectMap lb:sm_artist ;
+  rr:predicateObjectMap 
+    [rr:predicate foaf:based_near ;
+     rr:objectMap [rr:template "http://musicbrainz.org/area/{area}#_" ;
+                   rr:termType rr:IRI]] .
+
+lb:artist_credit_release_group a rr:TriplesMap ;
+  rr:logicalTable 
+    [rr:sqlQuery 
+      """SELECT artist.gid, release_group.gid AS release_group_gid
+         FROM artist
+         INNER JOIN artist_credit_name ON artist.id = artist_credit_name.artist 
+         INNER JOIN artist_credit 
+           ON artist_credit.id = artist_credit_name.artist_credit
+         INNER JOIN release_group 
+           ON artist_credit.id = release_group.artist_credit"""] ;
+  rr:subjectMap lb:sm_artist ;
+  rr:predicateObjectMap 
+    [rr:predicate foaf:made ;
+     rr:objectMap 
+       [rr:template "http://musicbrainz.org/signal-group/{release_group_gid}#_"]] .
+
+lb:artist_credit_release a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT artist.gid, release.gid AS release_gid
+       FROM artist
+            INNER JOIN artist_credit_name 
+              ON artist.id = artist_credit_name.artist 
+            INNER JOIN artist_credit
+              ON artist_credit.id = artist_credit_name.artist_credit 
+            INNER JOIN release
+              ON artist_credit.id = release.artist_credit"""] ;
+  rr:subjectMap lb:sm_artist ;
+  rr:predicateObjectMap 
+    [rr:predicate foaf:made ;
+     rr:objectMap 
+       [rr:template "http://musicbrainz.org/release/{release_gid}#_"]] .
+
+lb:artist_credit_track a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT artist.gid, track.id  
+       FROM artist
+         INNER JOIN artist_credit_name 
+           ON artist.id = artist_credit_name.artist 
+         INNER JOIN artist_credit 
+           ON artist_credit.id = artist_credit_name.artist_credit 
+         INNER JOIN track ON artist_credit.id = track.artist_credit"""] ;
+  rr:subjectMap lb:sm_artist ;
+  rr:predicateObjectMap 
+    [rr:predicate foaf:made ;
+     rr:objectMap 
+       [rr:template "http://musicbrainz.org/track/{id}#_"]] .
+
+#BN: removed the 'canonicalisation' that broke non-English Wikipedia URLs
+#BN: turned rdfs:seeAlso into foaf:isPrimaryTopicOf
+lb:artist_wikipedia a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT artist.gid, url  
+       FROM artist 
+         INNER JOIN l_artist_url ON artist.id = l_artist_url.entity0
+         INNER JOIN link ON l_artist_url.link = link.id 
+         INNER JOIN link_type ON link_type = link_type.id 
+         INNER JOIN url on l_artist_url.entity1 = url.id  
+       WHERE link_type.gid='29651736-fa6d-48e4-aadc-a557c6add1cb'"""] ;
+  rr:subjectMap lb:sm_artist ;
+  rr:predicateObjectMap 
+    [rr:predicate foaf:isPrimaryTopicOf ;
+     rr:objectMap [rr:column "url" ;
+                   rr:termType rr:IRI]] .
+
+lb:artist_twitter a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT artist.gid, url  
+       FROM artist 
+         INNER JOIN l_artist_url ON artist.id = l_artist_url.entity0
+         INNER JOIN link ON l_artist_url.link = link.id 
+         INNER JOIN link_type ON link_type = link_type.id 
+         INNER JOIN url on l_artist_url.entity1 = url.id  
+       WHERE link_type.gid='9309af3a-ebb6-4960-aebb-d286bd3ed1c7'
+         AND url LIKE 'http://twitter.com/%'"""] ;
+  rr:subjectMap lb:sm_artist ;
+  rr:predicateObjectMap
+    [rr:predicate foaf:account ;
+     rr:objectMap [rr:column "url" ;
+                   rr:termType rr:IRI]] .
+
+lb:artist_member a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT a1.gid, a2.gid AS band
+       FROM artist a1
+         INNER JOIN l_artist_artist ON a1.id = l_artist_artist.entity0 
+         INNER JOIN link ON l_artist_artist.link = link.id 
+         INNER JOIN link_type ON link_type = link_type.id 
+         INNER JOIN artist a2 on l_artist_artist.entity1 = a2.id 
+       WHERE link_type.gid='5be4c609-9afa-4ea0-910b-12ffb71e3821'
+         AND link.ended=FALSE"""] ;
+  rr:subjectMap lb:sm_artist ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:member_of ;
+     rr:objectMap [rr:template "http://musicbrainz.org/artist/{band}#_" ;
+                   rr:termType rr:IRI]] .
+
+#N.B. should these also be primaryTopicOf?
+#discogs, ibdb, musicmoz
+lb:artist_seeAlso a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT artist.gid, url.url
+       FROM artist
+         INNER JOIN l_artist_url 
+           ON artist.id = l_artist_url.entity0
+         INNER JOIN url ON l_artist_url.entity1 = url.id  
+         INNER JOIN link ON l_artist_url.link = link.id
+         INNER JOIN link_type ON link.link_type = link_type.id
+       WHERE link_type.gid IN
+               ('04a5b104-a4c2-4bac-99a1-7b837c37d9e4',
+                '5728c659-56b2-4e23-97d1-80e1f229c7d3',
+                'ded9a80a-e6de-4831-880c-c78b9981b54b')"""] ;
+  rr:subjectMap lb:sm_artist ;
+  rr:predicateObjectMap [
+    rr:predicate rdfs:seeAlso ;
+    rr:objectMap [rr:column "url" ; rr:termType rr:IRI]] .
+
+lb:artist_recording a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT artist.gid, recording.gid AS recording_gid 
+       FROM artist
+         INNER JOIN artist_credit_name ON artist.id = artist_credit_name.artist
+         INNER JOIN artist_credit 
+           ON artist_credit.id = artist_credit_name.artist_credit
+         INNER JOIN recording 
+           ON artist_credit.id = recording.artist_credit"""] ;
+  rr:subjectMap lb:sm_artist ;
+  rr:predicateObjectMap 
+    [rr:predicate foaf:made ;
+     rr:objectMap [rr:template "http://musicbrainz.org/recording/{recording_gid}#_"]] .
+
+lb:artist_annotation a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT gid, text 
+       FROM annotation 
+         INNER JOIN artist_annotation 
+           ON annotation.id = artist_annotation.annotation
+         INNER JOIN artist ON artist_annotation.artist = artist.id"""] ;
+  rr:subjectMap lb:sm_artist ;
+  rr:predicateObjectMap 
+    [rr:predicate rdfs:comment ;
+     rr:objectMap [rr:column "text" ; rr:datatype xsd:string]] .
+
+
+# MB area => DBpedia link
+
+lb:sm_area rr:template "http://musicbrainz.org/area/{gid}#_" .
+lb:sm_artist rr:template "http://musicbrainz.org/artist/{gid}#_" .
+lb:sm_signal_group rr:template "http://musicbrainz.org/signal-group/{gid}#_" .
+
+#pt.dbpedia.org wasn't resolving - to check
+
+lb:artist_dbpedia a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT artist.gid, 
+              REPLACE(REPLACE(url, 'wikipedia.org/wiki', 
+                                   'dbpedia.org/resource'), 
+                      'http://en.', 
+                      'http://')
+                AS url 
+       FROM artist 
+         INNER JOIN l_artist_url ON artist.id = l_artist_url.entity0
+         INNER JOIN link ON l_artist_url.link = link.id 
+         INNER JOIN link_type ON link_type = link_type.id 
+         INNER JOIN url on l_artist_url.entity1 = url.id  
+       WHERE link_type.gid='29651736-fa6d-48e4-aadc-a557c6add1cb'
+       AND url SIMILAR TO 
+                 'http://(de|el|en|es|ko|pl|pt).wikipedia.org/wiki/%'"""] ;
+  rr:subjectMap lb:sm_artist ;
+  rr:predicateObjectMap 
+    [rr:predicate owl:sameAs ;
+     rr:objectMap [rr:column "url"; rr:termType rr:IRI]] .
+
+lb:release_group_dbpedia a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT release_group.gid, 
+              REPLACE(REPLACE(url, 'wikipedia.org/wiki', 
+                                   'dbpedia.org/resource'), 
+                      'http://en.', 
+                      'http://')
+                AS url 
+       FROM release_group 
+         INNER JOIN l_release_group_url ON release_group.id 
+                      = l_release_group_url.entity0
+         INNER JOIN link ON l_release_group_url.link = link.id 
+         INNER JOIN link_type ON link_type = link_type.id 
+         INNER JOIN url on l_release_group_url.entity1 = url.id  
+       WHERE link_type.gid='6578f0e9-1ace-4095-9de8-6e517ddb1ceb'
+       AND url SIMILAR TO 
+                 'http://(de|el|en|es|ko|pl|pt).wikipedia.org/wiki/%'"""] ;
+  rr:subjectMap lb:sm_signal_group ;
+  rr:predicateObjectMap 
+    [rr:predicate rdfs:seeAlso ;
+     rr:objectMap [rr:column "url"; rr:termType rr:IRI]] .
+
+lb:area_dbpedia a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT area.gid, 
+              REPLACE(REPLACE(url, 'wikipedia.org/wiki', 
+                                   'dbpedia.org/resource'), 
+                      'http://en.', 
+                      'http://')
+                AS url 
+       FROM area
+         INNER JOIN l_area_url ON area.id = l_area_url.entity0
+         INNER JOIN link ON l_area_url.link = link.id 
+         INNER JOIN link_type ON link_type = link_type.id 
+         INNER JOIN url on l_area_url.entity1 = url.id  
+       WHERE link_type.gid='9228621d-9720-35c3-ad3f-327d789464ec'
+       AND url SIMILAR TO 
+                 'http://(de|el|en|es|ko|pl|pt).wikipedia.org/wiki/%'"""] ;
+  rr:subjectMap lb:sm_area ;
+  rr:predicateObjectMap 
+    [rr:predicate owl:sameAs ;
+     rr:objectMap [rr:column "url"; rr:termType rr:IRI]] .
+
+# MB label => mo:Label
+
+lb:sm_label rr:template "http://musicbrainz.org/label/{gid}#_" .
+
+lb:Label a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT * 
+       FROM label;"""] ;
+  rr:subjectMap [rr:class mo:Label ;
+                 rr:template "http://musicbrainz.org/label/{gid}#_"] ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:musicbrainz_guid ;
+     rr:objectMap [rr:column "gid" ; rr:datatype xsd:string]] .
+
+lb:label_area a rr:TriplesMap ;
+  rr:logicalTable[rr:sqlQuery 
+    """SELECT label.gid, area.gid AS area
+       FROM label
+            INNER JOIN area ON label.area = area.id"""] ;
+  rr:subjectMap lb:sm_label ;
+  rr:predicateObjectMap 
+    [rr:predicate foaf:based_near ;
+     rr:objectMap [rr:template "http://musicbrainz.org/area/{area}#_" ;
+                   rr:termType rr:IRI]] .
+
+lb:label_annotation a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT gid, text 
+       FROM annotation 
+         INNER JOIN label_annotation 
+           ON annotation.id = label_annotation.annotation
+         INNER JOIN label ON label_annotation.label = label.id"""] ;
+  rr:subjectMap lb:sm_label ;
+  rr:predicateObjectMap 
+    [rr:predicate rdfs:comment ;
+     rr:objectMap [rr:column "text" ; rr:datatype xsd:string]] .
+
+
+
+# MB medium => mo:Record
+
+lb:sm_medium rr:template "http://musicbrainz.org/record/{id}#_" .
+
+lb:Medium a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT * 
+       FROM medium;"""] ;
+  rr:subjectMap [rr:class mo:Record ;
+                 rr:template "http://musicbrainz.org/record/{id}#_"] ;
+  rr:predicateObjectMap 
+    [rr:predicate dc:title ;
+     rr:objectMap [rr:column "name" ; rr:datatype xsd:string]] ,
+    [rr:predicate mo:track_count ;
+     rr:objectMap [rr:column "track_count" ; rr:datatype xsd:int]] .
+
+
+lb:medium_track a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT medium.id, track.id AS track_id
+       FROM medium
+         INNER JOIN track ON track.medium = medium.id"""] ;
+  rr:subjectMap lb:sm_medium ;
+  rr:predicateObjectMap [
+    rr:predicate mo:track ;
+    rr:objectMap [rr:template "http://musicbrainz.org/track/{track_id}#_" ;
+                  rr:termType rr:IRI]] .
+
+
+lb:medium_format a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT medium.id, medium_format.id as medium_format_id 
+       FROM medium 
+         INNER JOIN medium_format ON medium.format = medium_format.id"""];
+  rr:subjectMap lb:sm_medium ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:media_type ;
+     rr:objectMap [rr:column "medium_format_id" ; rr:termType rr:IRI]] .
+
+
+# MB place => geo:SpatialThing
+
+lb:sm_place rr:template "http://musicbrainz.org/place/{gid}#_" .
+
+lb:place a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT * 
+       FROM place;"""] ;
+  rr:subjectMap [rr:template "http://musicbrainz.org/place/{gid}#_" ;
+                 rr:class geo:SpatialThing] ;
+  rr:predicateObjectMap 
+    [rr:predicate rdfs:label ;
+     rr:objectMap [rr:column "name" ; rr:datatype xsd:string]] .
+
+lb:place_annotation a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT gid, text 
+       FROM annotation 
+         INNER JOIN place_annotation 
+           ON annotation.id = place_annotation.annotation
+         INNER JOIN place ON place_annotation.place = place.id"""] ;
+  rr:subjectMap lb:sm_place ;
+  rr:predicateObjectMap 
+    [rr:predicate rdfs:comment ;
+     rr:objectMap [rr:column "text" ; rr:datatype xsd:string]] .
+
+# MB recording => mo:Signal
+
+lb:sm_recording rr:template "http://musicbrainz.org/recording/{gid}#_" .
+
+lb:Recording a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT * 
+       FROM recording;"""] ;
+  rr:subjectMap 
+    [rr:class mo:Signal ;
+     rr:template "http://musicbrainz.org/recording/{gid}#_"] ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:musicbrainz_guid ;
+     rr:objectMap [rr:column "gid" ; rr:datatype xsd:string]] ,
+    [rr:predicate dc:title ;
+     rr:objectMap [rr:column "name" ; rr:datatype xsd:string]] ,
+    [rr:predicate mo:duration ;
+     rr:objectMap [rr:column "length"; rr:datatype xsd:float]] .
+
+lb:recording_annotation a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT gid, text 
+       FROM annotation 
+         INNER JOIN recording_annotation 
+           ON annotation.id = recording_annotation.annotation
+         INNER JOIN recording 
+           ON recording_annotation.recording = recording.id"""] ;
+  rr:subjectMap lb:sm_recording ;
+  rr:predicateObjectMap 
+    [rr:predicate rdfs:comment ;
+     rr:objectMap [rr:column "text" ; rr:datatype xsd:string]] .
+
+# MB release => mo:Release, mo:ReleaseEvent
+
+lb:sm_artist rr:template "http://musicbrainz.org/artist/{gid}#_" .
+lb:sm_release rr:template "http://musicbrainz.org/release/{gid}#_" .
+lb:sm_release_event rr:template "http://musicbrainz.org/release/{gid}#{country}" .
+
+lb:Release a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT * 
+       FROM release;"""] ;
+  rr:subjectMap 
+    [rr:class mo:Release ;
+     rr:template "http://musicbrainz.org/release/{gid}#_"] ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:musicbrainz_guid ;
+     rr:objectMap [rr:column "gid"; rr:datatype xsd:string]] ,
+#
+#lb:release_name a rr:TriplesMap ;
+#  rr:logicalTable [rr:sqlQuery 
+#    """SELECT release.gid, release_name.name  
+#       FROM release
+#            INNER JOIN release_name ON release.name = release_name.id"""] ;
+#  rr:subjectMap lb:sm_release ;
+#  rr:predicateObjectMap 
+    [rr:predicate dc:title ;
+     rr:objectMap [rr:column "name" ; rr:datatype xsd:string]] .
+
+lb:release_record a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT release.gid, medium.id
+       FROM release
+            INNER JOIN medium ON release.id = medium.release"""] ;
+  rr:subjectMap lb:sm_release ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:record ;
+     rr:objectMap 
+       [rr:template "http://musicbrainz.org/record/{id}#_"]] .
+
+#BN: this mapping was missing entirely from LinkedBrainz
+# See https://groups.google.com/group/music-ontology-specification-group
+# at /browse_thread/thread/9ace96518564e8aa
+lb:release_release_group a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT release.gid, release_group.gid AS release_group_gid
+       FROM release
+            INNER JOIN release_group 
+              ON release.release_group = release_group.id"""] ;
+  rr:subjectMap lb:sm_release ;
+  rr:predicateObjectMap 
+    [rr:predicate event:factor ;
+     rr:objectMap 
+       [rr:template "http://musicbrainz.org/signal-group/{release_group_gid}#_"]] .
+
+lb:release_label a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT release.gid, label.gid AS label_gid 
+       FROM label 
+         INNER JOIN release_label ON label.id = release_label.label
+         INNER JOIN release ON release.id = release_label.release"""] ;
+  rr:subjectMap lb:sm_release ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:label;
+     rr:objectMap 
+       [rr:template "http://musicbrainz.org/label/{label_gid}#_"]] .
+
+lb:ReleaseEvent a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT release.gid, area.gid AS country
+       FROM release 
+         INNER JOIN release_country ON release_country.release = release.id
+         INNER JOIN area ON area.id = release_country.country
+       WHERE date_year IS NOT NULL"""] ;
+  rr:subjectMap [rr:class mo:ReleaseEvent ;
+                 rr:template "http://musicbrainz.org/release/{gid}#{country}"] ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:release ; 
+     rr:objectMap [rr:template "http://musicbrainz.org/release/{gid}#_"]] .
+
+lb:release_event_date a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT release.gid, 
+              BTRIM(TO_CHAR(date_year, '0000')) || '-' || 
+                BTRIM(TO_CHAR(date_month, '00')) || '-' ||
+                BTRIM(TO_CHAR(date_day, '00')) AS date,
+              area.gid AS country
+       FROM release 
+         INNER JOIN release_country ON release_country.release = release.id
+         INNER JOIN area ON area.id = release_country.country
+       WHERE date_year IS NOT NULL 
+         AND date_month IS NOT NULL 
+         AND date_day IS NOT NULL"""] ;
+  rr:subjectMap lb:sm_release_event ;
+  rr:predicateObjectMap 
+    [rr:predicate dc:date ;
+     rr:objectMap [rr:column "date"; rr:datatype xsd:date]] .
+
+lb:release_event_date_year_month a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT release.gid, 
+              BTRIM(TO_CHAR(date_year, '0000')) || '-' || 
+                BTRIM(TO_CHAR(date_month, '00')) AS year_month,
+              area.gid AS country
+       FROM release 
+         INNER JOIN release_country ON release_country.release = release.id
+         INNER JOIN area ON area.id = release_country.country
+       WHERE date_year IS NOT NULL 
+         AND date_month IS NOT NULL 
+         AND date_day IS NULL"""] ;
+  rr:subjectMap lb:sm_release_event ;
+  rr:predicateObjectMap 
+    [rr:predicate dc:date ;
+     rr:objectMap [rr:column "year_month"; rr:datatype xsd:gYearMonth]] .
+
+lb:release_event_date_year a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT release.gid, 
+              BTRIM(TO_CHAR(date_year, '0000')) AS year,
+              area.gid AS country
+       FROM release 
+         INNER JOIN release_country ON release_country.release = release.id
+         INNER JOIN area ON area.id = release_country.country
+       WHERE date_year IS NOT NULL 
+         AND date_month IS NULL 
+         AND date_day IS NULL"""] ;
+  rr:subjectMap lb:sm_release_event ;
+  rr:predicateObjectMap 
+    [rr:predicate dc:date ;
+     rr:objectMap [rr:column "year"; rr:datatype xsd:gYear]] .
+
+lb:release_event_place a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT release.gid, area.gid AS country
+       FROM release 
+         INNER JOIN release_country ON release_country.release = release.id
+         INNER JOIN area ON area.id = release_country.country"""] ;
+  rr:subjectMap lb:sm_release_event ;
+  rr:predicateObjectMap 
+    [rr:predicate event:place ;
+     rr:objectMap [rr:template "http://musicbrainz.org/area/{country}#_" ;
+                   rr:termType rr:IRI]] .
+
+lb:release_annotation a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT gid, text 
+       FROM annotation 
+         INNER JOIN release_annotation 
+           ON annotation.id = release_annotation.annotation
+         INNER JOIN release ON release_annotation.release = release.id"""] ;
+  rr:subjectMap lb:sm_release ;
+  rr:predicateObjectMap 
+    [rr:predicate rdfs:comment ;
+     rr:objectMap [rr:column "text" ; rr:datatype xsd:string]] .
+
+# MB release_group => mo:SignalGroup
+
+lb:sm_release_group rr:template "http://musicbrainz.org/release-group/{gid}#_" .
+
+lb:ReleaseGroup a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT * 
+       FROM release_group;"""] ;
+  rr:subjectMap 
+    [rr:class mo:SignalGroup ;
+     rr:template "http://musicbrainz.org/release-group/{gid}#_"] ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:musicbrainz_guid ;
+     rr:objectMap [rr:column "gid" ; rr:datatype xsd:string]] ,
+#
+#lb:release_group_name a rr:TriplesMap ;
+#  rr:logicalTable 
+#    [rr:sqlQuery """SELECT release_group.gid, release_name.name 
+#                    FROM release_group 
+#                      INNER JOIN release_name 
+#                        ON release_group.name = release_name.id"""] ;
+#  rr:subjectMap lb:sm_release_group ;
+#  rr:predicateObjectMap 
+    [rr:predicate dc:title ;
+     rr:objectMap [rr:column "name" ; rr:datatype xsd:string]] .
+
+#BN: removed the 'canonicalisation' that broke non-English Wikipedia URLs
+#BN: turned rdfs:seeAlso into foaf:isPrimaryTopicOf
+lb:release_group_wikipedia a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT release_group.gid, url  
+       FROM release_group
+         INNER JOIN l_release_group_url ON release_group.id
+                      = l_release_group_url.entity0
+         INNER JOIN link ON l_release_group_url.link = link.id 
+         INNER JOIN link_type ON link_type = link_type.id 
+         INNER JOIN url on l_release_group_url.entity1 = url.id  
+       WHERE link_type.gid='6578f0e9-1ace-4095-9de8-6e517ddb1ceb'"""] ;
+  rr:subjectMap lb:sm_release_group ;
+  rr:predicateObjectMap 
+    [rr:predicate foaf:isPrimaryTopicOf ;
+     rr:objectMap [rr:column "url" ;
+                   rr:termType rr:IRI]] .
+
+#Covers IMDB, MusicMoz, IOBDB
+# N.B. could also produce Linked IMDB sameAs?
+lb:release_group_seeAlso a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT release_group.gid, url.url 
+       FROM release_group
+         INNER JOIN l_release_group_url 
+           ON l_release_group_url.entity0 = release_group.id
+         INNER JOIN url
+           ON l_release_group_url.entity1 = url.id
+         INNER JOIN link
+           ON l_release_group_url.link = link.id
+         INNER JOIN link_type
+           ON link.link_type = link_type.id
+       WHERE link_type.gid IN
+         ('85b0a010-3237-47c7-8476-6fcefd4761af',
+          'd111c58d-0d9b-4675-99c1-ddc5a8e01847',
+          'fd87657e-aa2f-44ad-b5d8-d97c0c938a4d')"""] ;
+  rr:subjectMap lb:sm_release_group ;
+  rr:predicateObjectMap 
+    [rr:predicate rdfs:seeAlso ;
+     rr:objectMap [rr:column "url" ; rr:termType rr:IRI]] .
+
+lb:release_group_annotation a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT gid, text 
+       FROM annotation 
+         INNER JOIN release_group_annotation 
+           ON annotation.id = release_group_annotation.annotation
+         INNER JOIN release_group 
+           ON release_group_annotation.release_group = release_group.id"""] ;
+  rr:subjectMap lb:sm_release_group ;
+  rr:predicateObjectMap 
+    [rr:predicate rdfs:comment ;
+     rr:objectMap [rr:column "text" ; rr:datatype xsd:string]] .
+
+# MB tag => muto:Tag
+
+lb:sm_tag rr:template "http://musicbrainz.org/tag/{name}#_" .
+lb:sm_artist rr:template "http://musicbrainz.org/artist/{gid}#_" .
+lb:sm_label rr:template "http://musicbrainz.org/label/{gid}#_" .
+lb:sm_place rr:template "http://musicbrainz.org/place/{gid}#_" .
+lb:sm_recording rr:template "http://musicbrainz.org/recording/{gid}#_" .
+lb:sm_release rr:template "http://musicbrainz.org/release/{gid}#_" .
+lb:sm_work rr:template "http://musicbrainz.org/work/{gid}#_" .
+
+lb:tag a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT * 
+       FROM tag;"""] ;
+  rr:subjectMap [rr:template "http://musicbrainz.org/tag/{name}#_" ;
+                 rr:class muto:Tag] ;
+  rr:predicateObjectMap 
+    [rr:predicate muto:tagLabel ;
+     rr:objectMap [rr:column "name" ; rr:datatype xsd:string]] .
+
+lb:artist_tag a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT artist.gid, tag.name
+       FROM artist_tag
+         INNER JOIN artist ON artist_tag.artist = artist.id
+         INNER JOIN tag ON artist_tag.tag = tag.id"""] ;
+  rr:subjectMap [rr:template "http://musicbrainz.org/artist/{gid}#tag/{name}";
+                 rr:class muto:Tagging] ;
+  rr:predicateObjectMap
+    [rr:predicate muto:taggedResource ;
+     rr:objectMap lb:sm_artist] ,
+    [rr:predicate muto:hasTag ;
+     rr:objectMap lb:sm_tag] .
+
+lb:label_tag a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT label.gid, tag.name
+       FROM label_tag
+         INNER JOIN label ON label_tag.label = label.id
+         INNER JOIN tag ON label_tag.tag = tag.id"""] ;
+  rr:subjectMap [rr:template "http://musicbrainz.org/label/{gid}#tag/{name}";
+                 rr:class muto:Tagging] ;
+  rr:predicateObjectMap
+    [rr:predicate muto:taggedResource ;
+     rr:objectMap lb:sm_label] ,
+    [rr:predicate muto:hasTag ;
+     rr:objectMap lb:sm_tag] .
+
+lb:place_tag a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT place.gid, tag.name
+       FROM place_tag
+         INNER JOIN place ON place_tag.place = place.id
+         INNER JOIN tag ON place_tag.tag = tag.id"""] ;
+  rr:subjectMap [rr:template "http://musicbrainz.org/place/{gid}#tag/{name}";
+                 rr:class muto:Tagging] ;
+  rr:predicateObjectMap
+    [rr:predicate muto:taggedResource ;
+     rr:objectMap lb:sm_place] ,
+    [rr:predicate muto:hasTag ;
+     rr:objectMap lb:sm_tag] .
+
+lb:recording_tag a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT recording.gid, tag.name
+       FROM recording_tag
+         INNER JOIN recording ON recording_tag.recording = recording.id
+         INNER JOIN tag ON recording_tag.tag = tag.id"""] ;
+  rr:subjectMap [rr:template "http://musicbrainz.org/recording/{gid}#tag/{name}";
+                 rr:class muto:Tagging] ;
+  rr:predicateObjectMap
+    [rr:predicate muto:taggedResource ;
+     rr:objectMap lb:sm_recording] ,
+    [rr:predicate muto:hasTag ;
+     rr:objectMap lb:sm_tag] .
+
+lb:release_tag a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT release.gid, tag.name
+       FROM release_tag
+         INNER JOIN release ON release_tag.release = release.id
+         INNER JOIN tag ON release_tag.tag = tag.id"""] ;
+  rr:subjectMap [rr:template "http://musicbrainz.org/release/{gid}#tag/{name}";
+                 rr:class muto:Tagging] ;
+  rr:predicateObjectMap
+    [rr:predicate muto:taggedResource ;
+     rr:objectMap lb:sm_release] ,
+    [rr:predicate muto:hasTag ;
+     rr:objectMap lb:sm_tag] .
+
+lb:work_tag a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT work.gid, tag.name
+       FROM work_tag
+         INNER JOIN work ON work_tag.work = work.id
+         INNER JOIN tag ON work_tag.tag = tag.id"""] ;
+  rr:subjectMap [rr:template "http://musicbrainz.org/work/{gid}#tag/{name}";
+                 rr:class muto:Tagging] ;
+  rr:predicateObjectMap
+    [rr:predicate muto:taggedResource ;
+     rr:objectMap lb:sm_work] ,
+    [rr:predicate muto:hasTag ;
+     rr:objectMap lb:sm_tag] .
+
+# MB track => mo:Track
+
+lb:sm_track rr:template "http://musicbrainz.org/track/{id}#_" .
+
+lb:Track a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT * 
+       FROM track;"""] ;
+  rr:subjectMap [rr:class mo:Track ;
+                 rr:template "http://musicbrainz.org/track/{id}#_"] ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:track_number;
+     rr:objectMap [rr:column "position" ;
+                   rr:datatype xsd:nonNegativeInteger]] ,
+#
+#lb:track_name a rr:TriplesMap ;
+#  rr:logicalTable [rr:sqlQuery
+#    """SELECT track.id, track_name.name
+#       FROM track INNER JOIN track_name ON track.name = track_name.id"""] ;
+#  rr:subjectMap lb:sm_track ;
+#  rr:predicateObjectMap
+    [rr:predicate dc:title ;
+     rr:objectMap [rr:column "name" ; rr:datatype xsd:string]] .
+
+lb:track_length a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+                     """SELECT id, length 
+                        FROM track 
+                        WHERE length IS NOT NULL"""] ;
+  rr:subjectMap lb:sm_track ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:duration ;
+     rr:objectMap [rr:column "length" ; rr:datatype xsd:int]] .
+
+lb:track_recording a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT track.id, recording.gid 
+       FROM track INNER JOIN recording ON track.recording = recording.id"""] ;
+  rr:subjectMap lb:sm_track ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:publication_of ;
+     rr:objectMap [rr:template "http://musicbrainz.org/recording/{gid}#_"]] .
+
+
+# MB work => mo:MusicalWork, mo:Composition
+
+lb:sm_work rr:template "http://musicbrainz.org/work/{gid}#_" .
+lb:sm_composition rr:template "http://musicbrainz.org/work/{gid}#composition" .
+
+lb:Work a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT * 
+       FROM work;"""] ;
+  rr:subjectMap [rr:class mo:MusicalWork ;
+                 rr:template "http://musicbrainz.org/work/{gid}#_"] ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:musicbrainz_guid ;
+     rr:objectMap [rr:column "gid" ; rr:datatype xsd:string]] .
+
+lb:work_composition a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT * 
+       FROM work;"""] ;
+  rr:subjectMap [rr:class mo:Composition ;
+                 rr:template "http://musicbrainz.org/work/{gid}#composition"] ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:produced_work ;
+     rr:objectMap lb:sm_work] .
+
+#Note there is no longer a direct association between artists and works
+# rather composition is one of the advanced relationships between
+# artists and works
+lb:composition_artist a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT work.gid, artist.gid AS artist_gid  
+       FROM artist 
+         INNER JOIN l_artist_work ON artist.id = l_artist_work.entity0
+         INNER JOIN link ON l_artist_work.link = link.id 
+         INNER JOIN link_type ON link_type = link_type.id 
+         INNER JOIN work on l_artist_work.entity1 = work.id  
+       WHERE link_type.gid='d59d99ea-23d4-4a80-b066-edca32ee158f'"""] ;
+  rr:subjectMap lb:sm_composition ;
+  rr:predicateObjectMap 
+    [rr:predicate mo:composer ;
+     rr:objectMap [rr:template "http://musicbrainz.org/artist/{artist_gid}#_" ;
+                   rr:termType rr:IRI]] .
+
+#BN: turned rdfs:seeAlso into foaf:isPrimaryTopicOf
+lb:work_wikipedia a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT work.gid, url  
+       FROM work 
+         INNER JOIN l_url_work ON work.id = l_url_work.entity1
+         INNER JOIN link ON l_url_work.link = link.id 
+         INNER JOIN link_type ON link_type = link_type.id 
+         INNER JOIN url on l_url_work.entity0 = url.id  
+       WHERE link_type.gid='b45a88d6-851e-4a6e-9ec8-9a5f4ebe76ab'"""] ;
+  rr:subjectMap lb:sm_work ;
+  rr:predicateObjectMap 
+    [rr:predicate foaf:isPrimaryTopicOf ;
+     rr:objectMap [rr:column "url" ;
+                   rr:termType rr:IRI]] .
+
+lb:work_annotation a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery 
+    """SELECT gid, text 
+       FROM annotation 
+         INNER JOIN work_annotation 
+           ON annotation.id = work_annotation.annotation
+         INNER JOIN work ON work_annotation.work = work.id"""] ;
+  rr:subjectMap lb:sm_work ;
+  rr:predicateObjectMap 
+    [rr:predicate rdfs:comment ;
+     rr:objectMap [rr:column "text" ; rr:datatype xsd:string]] .
+
+lb:work_lyrics a rr:TriplesMap ;
+  rr:logicalTable [rr:sqlQuery
+    """SELECT work.gid, url
+       FROM work
+         INNER JOIN l_url_work ON work.id = l_url_work.entity1
+         INNER JOIN link ON l_url_work.link = link.id
+         INNER JOIN link_type ON link_type = link_type.id
+         INNER JOIN url on l_url_work.entity0 = url.id
+       WHERE link_type.gid='e38e65aa-75e0-42ba-ace0-072aeb91a538'"""] ;
+  rr:subjectMap lb:sm_work ;
+  rr:predicateObjectMap
+    [rr:predicate mo:lyrics ;
+     rr:objectMap [rr:column "url" ;
+                   rr:termType rr:IRI]] .
